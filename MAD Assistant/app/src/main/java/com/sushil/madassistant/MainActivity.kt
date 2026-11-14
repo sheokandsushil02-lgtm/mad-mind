@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sushil.madassistant.ui.theme.MadCyan
 import com.sushil.madassistant.ui.theme.MadGold
+import com.sushil.madassistant.ui.theme.MadSurface
 import com.sushil.madassistant.ui.theme.MadTextPrimary
 import com.sushil.madassistant.ui.theme.MadTheme
 import com.sushil.madassistant.viewmodel.ChatState
@@ -131,7 +132,7 @@ fun ChatScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = com.sushil.madassistant.ui.theme.MadSurface
+                    containerColor = MadSurface
                 )
             )
         }
