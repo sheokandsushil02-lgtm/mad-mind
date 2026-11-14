@@ -188,8 +188,11 @@ fun SettingsScreen(vm: MadViewModel, onBack: () -> Unit) {
                             type = "application/json"
                             putExtra(Intent.EXTRA_STREAM, uri)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
-                        context.startActivity(Intent.createChooser(share, "Backup Share"))
+                        try {
+                            context.startActivity(Intent.createChooser(share, "Backup Share"))
+                        } catch (_: Exception) {}
                     }
                 }
             }) { Text("Export Full Backup (JSON)") }
