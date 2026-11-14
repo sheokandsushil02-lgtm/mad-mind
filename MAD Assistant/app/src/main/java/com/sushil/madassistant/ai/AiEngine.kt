@@ -44,9 +44,6 @@ class AiEngine(private val settings: SettingsStore) {
         }
 
         val messages = JSONArray()
-        if (provider == "openai") {
-            messages.put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
-        }
         history.takeLast(10).forEach { (role, content) ->
             val r = if (provider == "openai") role else if (role == "assistant") "model" else "user"
             messages.put(JSONObject().put("role", r).put("content", content))
