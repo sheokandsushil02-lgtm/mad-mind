@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
                     voiceInputText?.let {
                         vm.sendUserMessage(it, speak = true)
                         voiceInputText = null
-    }
+                    }
                 }
                 MadApp(vm) { startMic ->
                     if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
@@ -178,7 +178,7 @@ fun ChatScreen(
                         Icon(Icons.Default.Settings, "Settings", tint = MadGold)
                     }
                 },
-                colors = TopAppBarColors2()
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MadSurface)
             )
         }
     ) { padding ->
@@ -257,6 +257,3 @@ fun ChatScreen(
         }
     }
 }
-
-@Composable
-fun TopAppBarColors2() = TopAppBarDefaults.topAppBarColors(containerColor = MadSurface)
