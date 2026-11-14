@@ -1,9 +1,13 @@
 package com.sushil.madassistant
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,13 +56,33 @@ class MainActivity : ComponentActivity() {
 
     private var voiceInputText: String? = null
 
+    private var pendingVoiceStart: (() -> Unit)? = null
+
+    private var micDeniedOnce = false
+
     private val micPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) pendingVoiceStart?.invoke()
+        if (granted) {
+            micDeniedOnce = false
+            pendingVoiceStart?.invoke()
+        } else {
+            micDeniedOnce = true
+            Toast.makeText(this,
+                "Microphone permission चाहिए। Settings में जाकर Microphone allow कीजिए।",
+                Toast.LENGTH_LONG).show()
+            openAppPermissionSettings()
+        }
     }
 
-    private var pendingVoiceStart: (() -> Unit)? = null
+    private fun openAppPermissionSettings() {
+        try {
+            startActivity(Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + packageName)
+            ))
+        } catch (_: Exception) {}
+    }
 
     private val notifPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -85,6 +109,13 @@ class MainActivity : ComponentActivity() {
                     if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                         == PackageManager.PERMISSION_GRANTED) {
                         startMic()
+                    } else if (micDeniedOnce) {
+                        // Previously denied: system dialog will not show again on
+                        // Android 11+. Send the user straight to App Settings.
+                        Toast.makeText(this,
+                            "Settings खुल रहा है — Microphone allow करके वापस आइए।",
+                            Toast.LENGTH_LONG).show()
+                        openAppPermissionSettings()
                     } else {
                         pendingVoiceStart = startMic
                         micPermission.launch(Manifest.permission.RECORD_AUDIO)
