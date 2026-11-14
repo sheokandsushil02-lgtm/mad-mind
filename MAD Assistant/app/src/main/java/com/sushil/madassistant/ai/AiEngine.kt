@@ -57,6 +57,12 @@ class AiEngine(private val settings: SettingsStore) {
             else
                 callGemini(apiKey, messages, toolDefs)
 
+            // First round: if the API call itself failed, show the real reason in chat.
+            if (round == 0) {
+                val apiError = describeApiFailure(provider, raw)
+                if (apiError != null) return@withContext apiError
+            }
+
             val toolCalls = extractToolCalls(raw, provider)
             if (toolCalls.isEmpty()) {
                 speech = extractSpeech(raw, provider)
@@ -74,6 +80,41 @@ class AiEngine(private val settings: SettingsStore) {
         }
         if (speech.isBlank()) speech = "जादूगर, एक तकनीकी दिक्कत आई, फिर से बोलिए।"
         speech
+    }
+
+    /**
+     * Returns a user-readable Hindi error if the API response indicates a failed
+     * HTTP call (bad key, quota exhausted, no network), otherwise null.
+     */
+    private fun describeApiFailure(provider: String, raw: JSONObject): String? {
+        val hasContent = if (provider == "openai")
+            raw.optJSONArray("choices") != null
+        else
+            raw.optJSONArray("candidates") != null
+        if (hasContent) return null
+
+        val httpErr = raw.optJSONObject("mad_http_error") ?: return null
+        val status = httpErr.optInt("status", 0)
+        val body = httpErr.optString("body", "").lowercase()
+        val label = if (provider == "openai") "OpenAI" else "Gemini"
+
+        return when {
+            status == -1 ->
+                "जादूगर, internet से जुड़ने में दिक्कत आई। Network check करके फिर बोलिए।"
+            status == 401 || status == 403 ||
+                body.contains("api key not valid") || body.contains("invalid api key") ||
+                body.contains("invalid_api_key") || body.contains("incorrect api key") ->
+                "जादूगर, $label की API key गलत है। Settings में जाकर सही key paste करके Save दबाइए, फिर मैं चल पाऊँगी।"
+            status == 429 || body.contains("quota") || body.contains("rate limit") ||
+                body.contains("resource_exhausted") ->
+                "जादूगर, $label की limit खत्म हो गई है (quota/429)। थोड़ी देर बाद कोशिश कीजिए या billing check कीजिए।"
+            status == 404 || body.contains("model not found") || body.contains("not found") ->
+                "जादूगर, $label का model अभी उपलब्ध नहीं है। थोड़ी देर बाद कोशिश कीजिए।"
+            status in 500..599 ->
+                "जादूगर, $label का server अभी व्यस्त है। थोड़ी देर बाद फिर बोलिए।"
+            else ->
+                "जादूगर, $label से जुड़ने में दिक्कत आई (code $status)। Internet और API key दोनों check कीजिए।"
+        }
     }
 
     private fun callGemini(key: String, messages: JSONArray, tools: JSONArray): JSONObject {
@@ -148,9 +189,22 @@ class AiEngine(private val settings: SettingsStore) {
             .addHeader("Content-Type", "application/json")
         if (auth != null) builder.addHeader("Authorization", auth)
         builder.post(body.toString().toRequestBody(JSON_MEDIA))
-        client.newCall(builder.build()).execute().use { resp ->
-            val text = resp.body?.string() ?: "{}"
-            return try { JSONObject(text) } catch (_: Exception) { JSONObject().put("error", text.take(300)) }
+        return try {
+            client.newCall(builder.build()).execute().use { resp ->
+                val text = resp.body?.string() ?: "{}"
+                val parsed = try { JSONObject(text) } catch (_: Exception) { JSONObject() }
+                if (resp.isSuccessful) {
+                    parsed
+                } else {
+                    parsed.put("mad_http_error", JSONObject()
+                        .put("status", resp.code)
+                        .put("body", text.take(400)))
+                }
+            }
+        } catch (e: Exception) {
+            JSONObject().put("mad_http_error", JSONObject()
+                .put("status", -1)
+                .put("body", (e.message ?: "network error").take(400)))
         }
     }
 }
