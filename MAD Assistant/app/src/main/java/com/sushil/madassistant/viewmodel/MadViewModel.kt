@@ -8,6 +8,9 @@ import com.sushil.madassistant.ai.MadToolExecutor
 import com.sushil.madassistant.data.CatalogSeeder
 import com.sushil.madassistant.data.db.ChatMessageEntity
 import com.sushil.madassistant.data.db.MadDatabase
+import com.sushil.madassistant.data.db.MemoryNoteEntity
+import com.sushil.madassistant.data.db.ShoppingListEntity
+import com.sushil.madassistant.data.db.TaskEntity
 import com.sushil.madassistant.data.settings.SettingsStore
 import com.sushil.madassistant.service.MadConversationBridge
 import com.sushil.madassistant.voice.VoiceEngine
@@ -43,6 +46,9 @@ class MadViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatState = MutableStateFlow<ChatState>(ChatState.Idle)
     val chatState: StateFlow<ChatState> = _chatState
 
+    // Continuous conversation: after speaking the reply, listen again automatically.
+    @Volatile private var continuousMode = false
+
     init {
         voiceEngine.initTts()
         viewModelScope.launch {
@@ -71,12 +77,18 @@ class MadViewModel(application: Application) : AndroidViewModel(application) {
             userText = text,
             history = history,
             toolDefs = toolExecutor.buildToolDefinitions(),
-            executor = { name, args -> toolExecutor.execute(name, args) }
+            engine = { name, args -> toolExecutor.execute(name, args) }
         )
 
         db.chatDao().insertMessage(ChatMessageEntity(role = "assistant", content = reply))
         _chatState.value = ChatState.Idle
-        if (speak) voiceEngine.speak(reply)
+        if (speak) {
+            if (continuousMode) {
+                voiceEngine.speak(reply) { startVoiceInput() }
+            } else {
+                voiceEngine.speak(reply)
+            }
+        }
     }
 
     fun startVoiceInput() {
@@ -85,6 +97,66 @@ class MadViewModel(application: Application) : AndroidViewModel(application) {
             voiceEngine.startListening { text ->
                 _chatState.value = ChatState.Idle
                 if (text.isNotBlank()) sendUserMessage(text, speak = true)
+            }
+        }
+    }
+
+    // -------- Continuous conversation toggle --------
+    fun setContinuousMode(enabled: Boolean) {
+        continuousMode = enabled
+    }
+
+    // -------- Dashboard CRUD --------
+    fun addTask(title: String, date: String, time: String) {
+        viewModelScope.launch {
+            db.taskDao().insertTask(
+                TaskEntity(title = title, date = date, time = time)
+            )
+        }
+    }
+
+    fun toggleTask(t: TaskEntity) {
+        viewModelScope.launch { db.taskDao().markDone(t.id, !t.isDone) }
+    }
+
+    fun deleteTask(t: TaskEntity) {
+        viewModelScope.launch { db.taskDao().deleteTaskById(t.id) }
+    }
+
+    fun addShoppingItem(shop: String, item: String) {
+        viewModelScope.launch {
+            val list = db.shoppingDao().findListByShop(shop)
+                ?: ShoppingListEntity(shopName = shop).also { db.shoppingDao().insertList(it) }.let { inserted ->
+                    db.shoppingDao().findListByShop(shop)
+                }
+            val listId = list?.id ?: return@launch
+            db.shoppingDao().insertShoppingItem(
+                com.sushil.madassistant.data.db.ShoppingItemEntity(listId = listId, itemName = item)
+            )
+        }
+    }
+
+    fun deleteShoppingList(l: ShoppingListEntity) {
+        viewModelScope.launch {
+            db.shoppingDao().deleteItemsOfList(l.id)
+            db.shoppingDao().deleteListById(l.id)
+        }
+    }
+
+    fun addMemoryNote(content: String, permanent: Boolean) {
+        viewModelScope.launch {
+            db.memoryDao().insertNote(
+                MemoryNoteEntity(content = content, isPermanent = permanent)
+            )
+        }
+    }
+
+    fun deleteMemoryNote(n: MemoryNoteEntity) {
+        viewModelScope.launch {
+            if (n.isPermanent) {
+                // Permanent notes are protected from UI deletion
+            } else {
+                db.memoryDao().deleteTemporaryNote(n.id)
             }
         }
     }
