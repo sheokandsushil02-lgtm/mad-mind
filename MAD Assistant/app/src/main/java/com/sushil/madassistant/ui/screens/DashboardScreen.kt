@@ -1,6 +1,5 @@
 package com.sushil.madassistant.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,13 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -42,12 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sushil.madassistant.data.db.CustomerEntity
-import com.suchil.madassistant.data.db.MadDatabase
-import com.sushil.madassistant.data.db.MemoryNoteEntity
-import com.sushil.madassistant.data.db.ShoppingListEntity
 import com.sushil.madassistant.data.db.TaskEntity
-import com.sushil.madassistant.data.db.WorkRecordEntity
 import com.sushil.madassistant.service.MadVoiceService
 import com.sushil.madassistant.ui.theme.MadCyan
 import com.sushil.madassistant.ui.theme.MadGold
@@ -68,10 +59,9 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
     val workRecords by vm.allWorkRecords.collectAsState(initial = emptyList())
     val memoryNotes by vm.allMemoryNotes.collectAsState(initial = emptyList())
 
-    var addCustomerVisible by remember { mutableStateOf(false) }
-    var addTaskVisible by remember { mutableStateOf(false) }
-    var addNoteVisible by remember { mutableStateOf(false) }
-    var addListVisible by remember { mutableStateOf(false) }
+    var showAddTask by remember { mutableStateOf(false) }
+    var showAddNote by remember { mutableStateOf(false) }
+    var showAddList by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -91,7 +81,6 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Status bar: Sleep / Wake
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -113,14 +102,13 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
                     .padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Stats cards
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         StatCard("Customers", customers.size.toString(), Modifier.weight(1f), MadCyan)
-                        StatCard("Tasks", tasks.count { !it.isDone }.toString(), Modifier.weight(1f), MadGold)
+                        StatCard("Pending Tasks", tasks.count { !it.isDone }.toString(), Modifier.weight(1f), MadGold)
                     }
                 }
                 item {
@@ -133,37 +121,44 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
                     }
                 }
 
-                // Tasks section
+                // ---- Tasks ----
                 item {
-                    SectionHeader("Tasks / Reminders", Modifier.fillMaxWidth()) {
-                        addTaskVisible = !addTaskVisible
-                    }
+                    SectionHeader("Tasks / Reminders") { showAddTask = !showAddTask }
                 }
-                if (addTaskVisible) item {
-                    AddTaskForm(vm) { addTaskVisible = }
+                if (showAddTask) item {
+                    AddTaskForm(onAdd = { title, date, time ->
+                        scope.launch { vm.addTask(title, date, time) }
+                        showAddTask = false
+                    })
                 }
                 items(tasks.size) { idx ->
-                    val t = tasks[idx]
-                    TaskRow(vm, t)
+                    TaskRow(
+                        task = tasks[idx],
+                        onToggle = { scope.launch { vm.toggleTask(tasks[idx]) } },
+                        onDelete = { scope.launch { vm.deleteTask(tasks[idx]) } }
+                    )
                 }
 
-                // Shopping lists section
+                // ---- Shopping Lists ----
                 item {
-                    SectionHeader("Shopping Lists", Modifier.fillMaxWidth()) {
-                        addListVisible = !addListVisible
-                    }
+                    SectionHeader("Shopping Lists") { showAddList = !showAddList }
                 }
-                if (addListVisible) item {
-                    AddShoppingListForm(vm) { addListVisible = false }
+                if (showAddList) item {
+                    AddShoppingListForm(onAdd = { shop, item ->
+                        scope.launch { vm.addShoppingItem(shop, item) }
+                        showAddList = false
+                    })
                 }
                 items(shoppingLists.size) { idx ->
-                    ShoppingListRow(vm, shoppingLists[idx])
+                    val list = shoppingLists[idx]
+                    ShoppingListRow(
+                        listName = list.shopName,
+                        onDelete = { scope.launch { vm.deleteShoppingList(list) } }
+                    )
                 }
 
-                // Work records section
-                item {
-                    SectionHeader("Work Records", Modifier.fillMaxWidth()) { }
-                }
+                // ---- Work Records ----
+                item { SectionHeader("Work Records") { } }
                 items(workRecords.size) { idx ->
                     val r = workRecords[idx]
                     Card(
@@ -177,14 +172,15 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
                     }
                 }
 
-                // Memory notes section
+                // ---- Memory Notes ----
                 item {
-                    SectionHeader("Memory Notes", Modifier.fillMaxWidth()) {
-                        addNoteVisible = !addNoteVisible
-                    }
+                    SectionHeader("Memory Notes") { showAddNote = !showAddNote }
                 }
-                if (addNoteVisible) item {
-                    AddNoteForm(vm) { addNoteVisible = false }
+                if (showAddNote) item {
+                    AddNoteForm(onAdd = { content, permanent ->
+                        scope.launch { vm.addMemoryNote(content, permanent) }
+                        showAddNote = false
+                    })
                 }
                 items(memoryNotes.size) { idx ->
                     val n = memoryNotes[idx]
@@ -195,15 +191,18 @@ fun DashboardScreen(vm: MadViewModel, onBack: () -> Unit) {
                         Row(Modifier.padding(12.dp)) {
                             Text(n.content, color = MadTextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
                             Text(
-                                if (n.isPermanent) "P" else "T",
+                                if (n.isPermanent) "Permanent" else "Temp",
                                 color = if (n.isPermanent) MadGold else MadCyan,
                                 fontSize = 12.sp
                             )
+                            TextButton(onClick = { scope.launch { vm.deleteMemoryNote(n) } }) {
+                                Text("Delete", color = MadCyan, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
 
-                item { Spacer(Modifier.height(20.dp)) }
+                item { Spacer(Modifier.height(24.dp)) }
             }
         }
     }
@@ -223,17 +222,125 @@ fun StatCard(label: String, value: String, modifier: Modifier = Modifier, color:
 }
 
 @Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier, onAdd: () -> Unit) {
+fun SectionHeader(title: String, onAdd: () -> Unit) {
     Row(
-        modifier = modifier,
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(title, color = MadGold, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         IconButton(onClick = onAdd) {
             Icon(Icons.Default.Add, "Add", tint = MadCyan)
         }
-        IconButton(onClick = onAdd) {
-            Icon(Icons.Default.Delete, "Del", tint = MadCyan)
+    }
+}
+
+@Composable
+fun AddTaskForm(onAdd: (String, String, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MadSurface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = title, onValueChange = { title = it },
+                label = { Text("Task title") }, modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = date, onValueChange = { date = it },
+                    label = { Text("Date (YYYY-MM-DD)") }, modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = time, onValueChange = { time = it },
+                    label = { Text("Time (HH:MM)") }, modifier = Modifier.weight(1f)
+                )
+            }
+            Button(onClick = { if (title.isNotBlank()) onAdd(title.trim(), date.trim(), time.trim()) }) {
+                Text("Save Task")
+            }
+        }
+    }
+}
+
+@Composable
+fun TaskRow(task: TaskEntity, onToggle: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MadSurface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Checkbox(checked = task.isDone, onCheckedChange = { onToggle() })
+            Column(Modifier.weight(1f)) {
+                Text(task.title, color = MadTextPrimary, fontSize = 15.sp)
+                if (task.date.isNotBlank()) {
+                    Text("${task.date} ${task.time}", color = MadCyan, fontSize = 12.sp)
+                }
+            }
+            TextButton(onClick = onDelete) { Text("Delete", color = MadGold, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+fun AddShoppingListForm(onAdd: (String, String) -> Unit) {
+    var shop by remember { mutableStateOf("") }
+    var item by remember { mutableStateOf("") }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MadSurface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = shop, onValueChange = { shop = it },
+                label = { Text("Shop name") }, modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = item, onValueChange = { item = it },
+                label = { Text("Item") }, modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = {
+                if (shop.isNotBlank() && item.isNotBlank()) onAdd(shop.trim(), item.trim())
+            }) { Text("Add to Shopping List") }
+        }
+    }
+}
+
+@Composable
+fun ShoppingListRow(listName: String, onDelete: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MadSurface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(listName, color = MadTextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = onDelete) { Text("Delete", color = MadGold, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+fun AddNoteForm(onAdd: (String, Boolean) -> Unit) {
+    var content by remember { mutableStateOf("") }
+    var permanent by remember { mutableStateOf(false) }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MadSurface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = content, onValueChange = { content = it },
+                label = { Text("Note (memory)") }, modifier = Modifier.fillMaxWidth()
+            )
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = permanent, onCheckedChange = { permanent = it })
+                Text("Permanent", color = MadTextPrimary, fontSize = 13.sp)
+            }
+            Button(onClick = { if (content.isNotBlank()) onAdd(content.trim(), permanent) }) {
+                Text("Save Note")
+            }
         }
     }
 }
