@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.sushil.madassistant"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.sushil.madassistant"
