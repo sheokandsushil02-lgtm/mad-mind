@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -44,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sushil.madassistant.ui.screens.DashboardScreen
 import com.sushil.madassistant.ui.theme.MadCyan
 import com.sushil.madassistant.ui.theme.MadGold
 import com.sushil.madassistant.ui.theme.MadSurface
@@ -103,15 +106,13 @@ class MainActivity : ComponentActivity() {
                     voiceInputText?.let {
                         vm.sendUserMessage(it, speak = true)
                         voiceInputText = null
-                    }
+    }
                 }
                 MadApp(vm) { startMic ->
                     if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                         == PackageManager.PERMISSION_GRANTED) {
                         startMic()
                     } else if (micDeniedOnce) {
-                        // Previously denied: system dialog will not show again on
-                        // Android 11+. Send the user straight to App Settings.
                         Toast.makeText(this,
                             "Settings खुल रहा है — Microphone allow करके वापस आइए।",
                             Toast.LENGTH_LONG).show()
@@ -126,14 +127,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class Screen { Chat, Dashboard, Settings }
+
 @Composable
 fun MadApp(vm: MadViewModel, micLauncher: (() -> Unit) -> Unit) {
-    var showSettings by remember { mutableStateOf(false) }
+    var screen by remember { mutableStateOf(Screen.Chat) }
 
-    if (!showSettings) {
-        ChatScreen(vm = vm, micLauncher = micLauncher, onOpenSettings = { showSettings = true })
-    } else {
-        com.sushil.madassistant.ui.screens.SettingsScreen(vm = vm, onBack = { showSettings = false })
+    when (screen) {
+        Screen.Chat -> ChatScreen(
+            vm = vm,
+            micLauncher = micLauncher,
+            onOpenDashboard = { screen = Screen.Dashboard },
+            onOpenSettings = { screen = Screen.Settings }
+        )
+        Screen.Dashboard -> DashboardScreen(vm = vm, onBack = { screen = Screen.Chat })
+        Screen.Settings -> com.sushil.madassistant.ui.screens.SettingsScreen(
+            vm = vm,
+            onBack = { screen = Screen.Chat }
+        )
     }
 }
 
@@ -142,11 +153,13 @@ fun MadApp(vm: MadViewModel, micLauncher: (() -> Unit) -> Unit) {
 fun ChatScreen(
     vm: MadViewModel,
     micLauncher: (() -> Unit) -> Unit,
+    onOpenDashboard: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val messages by vm.chatMessages.collectAsState(initial = emptyList())
     val chatState by vm.chatState.collectAsState()
     var input by remember { mutableStateOf("") }
+    var continuous by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
@@ -158,13 +171,14 @@ fun ChatScreen(
             TopAppBar(
                 title = { Text("MAD Assistant", color = MadCyan, fontSize = 20.sp) },
                 actions = {
+                    IconButton(onClick = onOpenDashboard) {
+                        Icon(Icons.Default.Dashboard, "Dashboard", tint = MadGold)
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, "Settings", tint = MadGold)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MadSurface
-                )
+                colors = TopAppBarColors2()
             )
         }
     ) { padding ->
@@ -208,8 +222,20 @@ fun ChatScreen(
                     .padding(10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                IconButton(onClick = { micLauncher { vm.startVoiceInput() } }) {
-                    Icon(Icons.Default.Mic, "Mic", tint = MadCyan, modifier = Modifier.size(32.dp))
+                Column {
+                    IconButton(onClick = { micLauncher { vm.startVoiceInput() } }) {
+                        Icon(Icons.Default.Mic, "Mic", tint = MadCyan, modifier = Modifier.size(32.dp))
+                    }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Switch(
+                            checked = continuous,
+                            onCheckedChange = {
+                                continuous = it
+                                vm.setContinuousMode(it)
+                            }
+                        )
+                        Text("Continuous", color = MadCyan, fontSize = 10.sp)
+                    }
                 }
                 OutlinedTextField(
                     value = input,
@@ -231,3 +257,6 @@ fun ChatScreen(
         }
     }
 }
+
+@Composable
+fun TopAppBarColors2() = TopAppBarDefaults.topAppBarColors(containerColor = MadSurface)
