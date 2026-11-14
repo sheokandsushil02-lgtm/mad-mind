@@ -1,0 +1,36 @@
+name: Build MAD Assistant APK
+
+on:
+  push:
+    branches: [ mad-assistant ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Debug APK
+        working-directory: "MAD Assistant"
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp "MAD Assistant/app/build/outputs/apk/debug/app-debug.apk" "MAD-Assistant.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAD-Assistant-APK
+          path: MAD-Assistant.apk
+          retention-days: 30
