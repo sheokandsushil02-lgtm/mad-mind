@@ -9,6 +9,7 @@ import com.sushil.madassistant.data.CatalogSeeder
 import com.sushil.madassistant.data.db.ChatMessageEntity
 import com.sushil.madassistant.data.db.MadDatabase
 import com.sushil.madassistant.data.db.MemoryNoteEntity
+import com.sushil.madassistant.data.db.ShoppingItemEntity
 import com.sushil.madassistant.data.db.ShoppingListEntity
 import com.sushil.madassistant.data.db.TaskEntity
 import com.sushil.madassistant.data.settings.SettingsStore
@@ -77,7 +78,7 @@ class MadViewModel(application: Application) : AndroidViewModel(application) {
             userText = text,
             history = history,
             toolDefs = toolExecutor.buildToolDefinitions(),
-            engine = { name, args -> toolExecutor.execute(name, args) }
+            executor = { name, args -> toolExecutor.execute(name, args) }
         )
 
         db.chatDao().insertMessage(ChatMessageEntity(role = "assistant", content = reply))
@@ -125,13 +126,14 @@ class MadViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addShoppingItem(shop: String, item: String) {
         viewModelScope.launch {
-            val list = db.shoppingDao().findListByShop(shop)
-                ?: ShoppingListEntity(shopName = shop).also { db.shoppingDao().insertList(it) }.let { inserted ->
-                    db.shoppingDao().findListByShop(shop)
-                }
-            val listId = list?.id ?: return@launch
+            var list = db.shoppingDao().findListByShop(shop)
+            if (list == null) {
+                val newId = db.shoppingDao().insertList(ShoppingListEntity(shopName = shop))
+                list = db.shoppingDao().findListByShop(shop)
+                    ?: ShoppingListEntity(id = newId, shopName = shop)
+            }
             db.shoppingDao().insertShoppingItem(
-                com.sushil.madassistant.data.db.ShoppingItemEntity(listId = listId, itemName = item)
+                ShoppingItemEntity(listId = list.id, itemName = item)
             )
         }
     }
