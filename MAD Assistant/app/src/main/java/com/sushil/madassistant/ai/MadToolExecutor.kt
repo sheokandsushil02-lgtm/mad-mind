@@ -15,6 +15,7 @@ import com.sushil.madassistant.data.db.WorkRecordItemEntity
 import com.sushil.madassistant.pdf.PdfEngine
 import com.sushil.madassistant.util.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -320,10 +321,9 @@ class MadToolExecutor(
                 }
                 "get_customer_work_history" -> {
                     val cid = args.optLong("customerId")
-                    val recs = db.workRecordDao().getWorkRecordsForCustomer(cid)
-                    val list = recs
+                    val recs = db.workRecordDao().getWorkRecordsForCustomer(cid).first()
                     out("records" to JSONArray().apply {
-                        kotlinx.coroutines.flow.first(list).forEach { r ->
+                        recs.forEach { r ->
                             put(JSONObject().put("id", r.id).put("workType", r.workType)
                                 .put("category", r.category).put("subcategory", r.subcategory)
                                 .put("date", r.date).put("pdfPath", r.pdfPath))
