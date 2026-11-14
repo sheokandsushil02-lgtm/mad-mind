@@ -108,7 +108,7 @@ class AiEngine(private val settings: SettingsStore) {
         val calls = mutableListOf<ToolCallResult>()
         try {
             if (provider == "openai") {
-                val msg = raw.optJSONObject("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return emptyList()
+                val msg = raw.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return emptyList()
                 val tcs = msg.optJSONArray("tool_calls") ?: return emptyList()
                 for (i in 0 until tcs.length()) {
                     val fn = tcs.getJSONObject(i).optJSONObject("function") ?: continue
@@ -131,7 +131,7 @@ class AiEngine(private val settings: SettingsStore) {
     private fun extractSpeech(raw: JSONObject, provider: String): String {
         return try {
             if (provider == "openai") {
-                raw.optJSONObject("choices")?.optJSONObject(0)
+                raw.optJSONArray("choices")?.optJSONObject(0)
                     ?.optJSONObject("message")?.optString("content", "") ?: ""
             } else {
                 val parts = raw.optJSONArray("candidates")?.optJSONObject(0)
